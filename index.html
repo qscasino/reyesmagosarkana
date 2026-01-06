@@ -1057,51 +1057,110 @@
     function createGift({ primary, ribbon, id }){
       const group = new THREE.Group();
       group.userData.id = id;
-
+    
+      // --- helper: RoundedBoxGeometry (sin libs externas) ---
+      // Basado en técnica de extrusión, liviano y queda muy bien.
+      function RoundedBoxGeometry(w, h, d, r, smooth=6){
+        const shape = new THREE.Shape();
+        const hw = w/2, hh = h/2;
+        r = Math.min(r, hw, hh);
+    
+        shape.moveTo(-hw + r, -hh);
+        shape.lineTo(hw - r, -hh);
+        shape.quadraticCurveTo(hw, -hh, hw, -hh + r);
+        shape.lineTo(hw, hh - r);
+        shape.quadraticCurveTo(hw, hh, hw - r, hh);
+        shape.lineTo(-hw + r, hh);
+        shape.quadraticCurveTo(-hw, hh, -hw, hh - r);
+        shape.lineTo(-hw, -hh + r);
+        shape.quadraticCurveTo(-hw, -hh, -hw + r, -hh);
+    
+        const geo = new THREE.ExtrudeGeometry(shape, {
+          depth: d,
+          bevelEnabled: true,
+          bevelSegments: smooth,
+          steps: 1,
+          bevelSize: r * 0.55,
+          bevelThickness: r * 0.55,
+          curveSegments: smooth
+        });
+    
+        geo.center();
+        return geo;
+      }
+    
       const matBox = new THREE.MeshPhysicalMaterial({
         color: primary,
-        roughness: 0.35,
-        metalness: 0.05,
-        clearcoat: 0.35,
-        clearcoatRoughness: 0.45
+        roughness: 0.28,
+        metalness: 0.06,
+        clearcoat: 0.55,
+        clearcoatRoughness: 0.25
       });
-
+    
       const matRibbon = new THREE.MeshPhysicalMaterial({
         color: ribbon,
-        roughness: 0.25,
-        metalness: 0.15,
-        clearcoat: 0.25,
-        clearcoatRoughness: 0.30
+        roughness: 0.22,
+        metalness: 0.18,
+        clearcoat: 0.35,
+        clearcoatRoughness: 0.28
       });
-
-      const box = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.72, 1.0), matBox);
+    
+      // “bisel/sombra” sutil en cantos (opcional)
+      const matEdge = new THREE.MeshStandardMaterial({
+        color: 0x000000,
+        transparent: true,
+        opacity: 0.08,
+        roughness: 1,
+        metalness: 0
+      });
+    
+      // --- Caja base (redondeada) ---
+      const baseGeo = RoundedBoxGeometry(1.0, 0.72, 1.0, 0.08, 6);
+      const box = new THREE.Mesh(baseGeo, matBox);
       group.add(box);
-
-      const rib1 = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.74, 1.02), matRibbon);
-      rib1.position.y = 0.01;
-      group.add(rib1);
-
-      const rib2 = new THREE.Mesh(new THREE.BoxGeometry(1.02, 0.16, 1.02), matRibbon);
-      rib2.position.y = 0.20;
-      group.add(rib2);
-
+    
+      // Sombra/edge overlay muy suave (le da “profundidad”)
+      const edge = new THREE.Mesh(baseGeo.clone(), matEdge);
+      edge.scale.set(1.01, 1.01, 1.01);
+      group.add(edge);
+    
+      // --- Cintas con relieve ---
+      const ribV = new THREE.Mesh(RoundedBoxGeometry(0.17, 0.76, 1.02, 0.05, 4), matRibbon);
+      ribV.position.y = 0.01;
+      ribV.position.z = 0.01;
+      group.add(ribV);
+    
+      const ribH = new THREE.Mesh(RoundedBoxGeometry(1.02, 0.18, 1.02, 0.05, 4), matRibbon);
+      ribH.position.y = 0.20;
+      ribH.position.z = 0.01;
+      group.add(ribH);
+    
+      // --- Tapa (redondeada) con pivot ---
       const lidPivot = new THREE.Group();
       lidPivot.position.set(0, 0.36, -0.52);
       group.add(lidPivot);
-
-      const lid = new THREE.Mesh(new THREE.BoxGeometry(1.04, 0.20, 1.04), matBox);
-      lid.position.set(0, 0.10, 0.52);
+    
+      const lid = new THREE.Mesh(RoundedBoxGeometry(1.06, 0.22, 1.06, 0.08, 6), matBox);
+      lid.position.set(0, 0.11, 0.52);
       lidPivot.add(lid);
-
-      const bow1 = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.06, 10, 18, Math.PI), matRibbon);
-      bow1.rotation.set(Math.PI/2, 0, 0);
-      bow1.position.set(-0.16, 0.50, 0.12);
+    
+      // --- Moño más lindo (2 loops + nudo) ---
+      const knot = new THREE.Mesh(new THREE.SphereGeometry(0.085, 18, 14), matRibbon);
+      knot.position.set(0, 0.52, 0.12);
+      group.add(knot);
+    
+      const loopGeo = new THREE.TorusGeometry(0.17, 0.055, 14, 28, Math.PI);
+      const bow1 = new THREE.Mesh(loopGeo, matRibbon);
+      bow1.rotation.set(Math.PI/2, 0.2, 0.15);
+      bow1.position.set(-0.17, 0.52, 0.12);
       group.add(bow1);
-
-      const bow2 = bow1.clone();
-      bow2.position.x = 0.16;
+    
+      const bow2 = new THREE.Mesh(loopGeo, matRibbon);
+      bow2.rotation.set(Math.PI/2, -0.2, -0.15);
+      bow2.position.set(0.17, 0.52, 0.12);
       group.add(bow2);
-
+    
+      // --- Hitbox (igual que antes) ---
       const hit = new THREE.Mesh(
         new THREE.BoxGeometry(1.35, 1.0, 1.35),
         new THREE.MeshBasicMaterial({ transparent:true, opacity:0 })
@@ -1110,9 +1169,10 @@
       hit.userData.isHit = true;
       hit.userData.parentGift = group;
       group.add(hit);
-
+    
       return { group, lidPivot, busy:false };
     }
+
 
     function onPointerDown(e){
       e.preventDefault();
@@ -1171,35 +1231,23 @@
     function openGiftAnim(giftObj, done){
       if(giftObj.busy) return;
       giftObj.busy = true;
-
+    
       const start = performance.now();
-      const dur = 900;
-
+      const dur = 820;
+    
       const fromRot = giftObj.lidPivot.rotation.x;
       const toRot = -1.25;
-
-      const fromS = giftObj.group.scale.x;
-      const popS1 = fromS * 1.12;
-      const popS2 = fromS * 1.00;
-
+    
       anims.push((t)=>{
         const p = Math.min(1, (t - start) / dur);
-        const ease = (p<0.5) ? (2*p*p) : (1 - Math.pow(-2*p+2,2)/2);
-
+    
+        // easeOutBack suave (rebote mínimo, no mueve la caja)
+        const c1 = 1.70158;
+        const c3 = c1 + 1;
+        const ease = 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2);
+    
         giftObj.lidPivot.rotation.x = fromRot + (toRot - fromRot) * ease;
-
-        let s;
-        if(p < 0.35){
-          const q = p / 0.35;
-          s = fromS + (popS1 - fromS) * q;
-        } else {
-          const q = (p - 0.35) / 0.65;
-          s = popS1 + (popS2 - popS1) * q;
-        }
-        giftObj.group.scale.setScalar(s);
-
-        giftObj.group.rotation.y += 0.010;
-
+    
         if(p >= 1){
           giftObj.busy = false;
           done && done();
@@ -1208,6 +1256,7 @@
         return true;
       });
     }
+
 
     function animate(t=performance.now()){
       requestAnimationFrame(animate);
