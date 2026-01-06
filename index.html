@@ -24,6 +24,9 @@
       --radius: 22px;
 
       --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+
+      /* ✅ para el “blur backdrop” (se actualiza por JS con el src real) */
+      --hero: url("assets/reyes.png");
     }
 
     *{ box-sizing:border-box }
@@ -153,7 +156,7 @@
       padding:12px;
     }
 
-    #snowLayer{ position:absolute; inset:0; pointer-events:none; z-index:2; }
+    #snowLayer{ position:absolute; inset:0; pointer-events:none; z-index:3; }
 
     #stage{
       position:relative;
@@ -163,6 +166,36 @@
       align-items:center;
       justify-content:center;
       z-index:1;
+
+      /* ✅ clave para que los pseudo-elementos queden detrás del contenido */
+      isolation:isolate;
+      overflow:hidden;
+      border-radius: 18px;
+    }
+
+    /* ✅ FONDO PRO: misma imagen en cover + blur (rellena y elimina “bordes pegados”) */
+    #stage::before{
+      content:"";
+      position:absolute;
+      inset:-40px; /* evita cortes del blur */
+      background: var(--hero) center / cover no-repeat;
+      filter: blur(22px) saturate(1.12) brightness(.98);
+      transform: scale(1.08);
+      opacity:.60;
+      z-index:0;
+      pointer-events:none;
+    }
+
+    /* ✅ Vignette/overlay para integrar todo */
+    #stage::after{
+      content:"";
+      position:absolute;
+      inset:0;
+      background:
+        radial-gradient(1200px 900px at 50% 18%, rgba(255,255,255,.12), rgba(0,0,0,.58)),
+        radial-gradient(900px 700px at 50% 70%, rgba(255,211,106,.10), rgba(0,0,0,0) 60%);
+      z-index:0;
+      pointer-events:none;
     }
 
     #santaWrap{
@@ -173,6 +206,7 @@
       align-items:center;
       justify-content:center;
       padding:10px;
+      z-index:1;
     }
 
     #gameLogo{
@@ -200,8 +234,21 @@
       transform: translateZ(0);
     }
 
-    /* ✅ ahora la imagen se llama igual (reutilizás tu estructura),
-       solo cambiaste el asset a assets/reyes.png */
+    /* ✅ (Opcional pero queda muy bien) vignette suave sobre la imagen para “matar” bordes */
+    #santaBox::after{
+      content:"";
+      position:absolute;
+      inset:-1px;
+      pointer-events:none;
+      z-index:4;
+      background: radial-gradient(circle at 50% 50%,
+        rgba(0,0,0,0) 62%,
+        rgba(0,0,0,.18) 92%,
+        rgba(0,0,0,.26) 100%);
+      opacity:.55;
+    }
+
+    /* ✅ ahora la imagen es assets/reyes.png */
     #santaBg{
       display:block;
       height: min(92vh, 980px);
@@ -210,7 +257,8 @@
       object-fit:contain;
       user-select:none;
       -webkit-user-drag:none;
-      filter: drop-shadow(0 22px 50px rgba(0,0,0,.55));
+      filter: drop-shadow(0 18px 44px rgba(0,0,0,.48));
+      border-radius: 12px; /* suaviza aún más el corte sin “destruir” */
     }
 
     #gl{
@@ -433,7 +481,6 @@
              onerror="this.classList.add('hidden')">
 
         <div id="santaBox">
-          <!-- ✅ Cambiá el asset: assets/reyes.png -->
           <img id="santaBg" src="assets/reyes.png" alt="Reyes" draggable="false" />
           <div id="gl"></div>
         </div>
@@ -473,36 +520,30 @@
     const STORAGE_KEY = "santaaa_gift_one_v1";
 
     // ✅ mantenemos TUS posiciones, y agregamos una tercera ("center")
-    // (las left/right NO se tocan)
     const HANDS = {
       desktop: {
         left:   { x: 0.30, y: 0.40 },
         right:  { x: 0.80, y: 0.40 },
-        center: { x: 0.55, y: 0.52 }   // ✅ nuevo regalo (ajustalo si querés)
+        center: { x: 0.55, y: 0.52 }
       },
       mobile: {
         left:   { x: 0.10, y: 0.20 },
         right:  { x: 0.40, y: 0.20 },
-        center: { x: 0.25, y: 0.33 }   // ✅ nuevo regalo (ajustalo si querés)
+        center: { x: 0.25, y: 0.33 }
       }
     };
 
-    // ✅ mismo scale
-    const SCALE = {
-      desktop: 0.16,
-      mobile:  0.05
-    };
+    const SCALE = { desktop: 0.16, mobile: 0.05 };
 
     const SCALE_CLAMP = {
       desktop: { min: 72, max: 190 },
       mobile:  { min: 56, max: 130 }
     };
 
-    // ✅ mismos premios para left/right + uno nuevo con valores equivalentes
     const PRIZES = {
       left:   { title: "🎁 Bono 200% en tu próxima carga", sub: "Se acredita en tu próxima carga. Consultá condiciones con tu asesor." },
       right:  { title: "🎁 3000 fichas gratis",            sub: "Se activa con una carga mínima de 5000. Consultá condiciones con tu asesor." },
-      center: { title: "🎁 Sorpresa de Reyes",             sub: "Premio especial. Consultá condiciones con tu asesor." } // ✅ nuevo
+      center: { title: "🎁 Sorpresa de Reyes",             sub: "Premio especial. Consultá condiciones con tu asesor." }
     };
 
     // =========================
@@ -541,6 +582,15 @@
     const hintEl    = document.getElementById("hint");
     const errBox    = document.getElementById("errBox");
     const santaImg  = document.getElementById("santaBg");
+    const stageEl   = document.getElementById("stage"); // ✅ para actualizar --hero
+
+    // ✅ mantiene el blur-backdrop siempre igual al src real del <img>
+    function syncHeroBackdrop(){
+      const src = santaImg?.currentSrc || santaImg?.src;
+      if(src) stageEl.style.setProperty("--hero", `url("${src}")`);
+    }
+    santaImg?.addEventListener("load", syncHeroBackdrop, { passive:true });
+    syncHeroBackdrop();
 
     let targetPct = 0;
     let visualPct = 0;
@@ -650,6 +700,7 @@
 
       hintEl.textContent = "Cargando imagen…";
       const okSanta = await ensureImageLoaded(santaImg, 6500);
+      syncHeroBackdrop(); // ✅ importante: al terminar carga, sincroniza el blur-backdrop
       step(28);
 
       hintEl.textContent = "Cargando motor 3D…";
@@ -761,7 +812,7 @@
     // THREE
     // =========================
     let scene, camera, renderer, raycaster, mouse;
-    let giftLeft, giftRight, giftCenter; // ✅ nuevo
+    let giftLeft, giftRight, giftCenter;
     let W=0, H=0;
     let anims = [];
     let busyPick = false;
@@ -851,7 +902,7 @@
 
       giftLeft   = createGift({ primary:0xff5b6a, ribbon:0xffd36a, id:"left"   });
       giftRight  = createGift({ primary:0x2fd6a0, ribbon:0xffffff, id:"right"  });
-      giftCenter = createGift({ primary:0x7a5cff, ribbon:0xffd36a, id:"center" }); // ✅ nuevo
+      giftCenter = createGift({ primary:0x7a5cff, ribbon:0xffd36a, id:"center" });
 
       scene.add(giftLeft.group, giftRight.group, giftCenter.group);
 
